@@ -164,4 +164,4 @@ def ames_housing(dirfolder, numvalid=100):
     validdf = _preprocess_numeric(validdf, listnumeric)
     testdf = _preprocess_numeric(testdf, listnumeric)
     #traindf, validdf, testdf = normalize_numeric(traindf, validdf, testdf, listnumeric)
-    return traindf, validdf, testdf, listnumeric, dictcategorical
+    return (traindf, trainy), (validdf, validy), testdf, listnumeric, dictcategorical
