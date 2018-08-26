@@ -1,7 +1,7 @@
 """Load data."""
-import os
-import numpy as np
-import pandas as pd
+import os as _os
+import numpy as _np
+import pandas as _pd
 
 def _preprocess_numeric(df, listnumeric):
     """Preprocess data to avoid numeric data columns with string 'NA' """
@@ -9,7 +9,7 @@ def _preprocess_numeric(df, listnumeric):
     for i, col in enumerate(listcolumns):
         if col in listnumeric:
             df.loc[:, col].replace('NA', -1, inplace=True)
-            df.loc[:, col] = df.loc[:, col].apply(pd.to_numeric)
+            df.loc[:, col] = df.loc[:, col].apply(_pd.to_numeric)
     return df
 
 def _normalize_numeric(traindf, validdf, testdf, listnumeric):
@@ -132,12 +132,12 @@ def ames_housing(dirfolder, numvalid=100):
                   }
     labelkey = 'SalePrice'
     
-    datadf = pd.read_csv(os.path.join(dirfolder, 'train.csv'), keep_default_na=False)
-    testdf = pd.read_csv(os.path.join(dirfolder, 'test.csv'), keep_default_na=False)    
+    datadf = _pd.read_csv(_os.path.join(dirfolder, 'train.csv'), keep_default_na=False)
+    testdf = _pd.read_csv(_os.path.join(dirfolder, 'test.csv'), keep_default_na=False)    
     datadf.set_index('Id', inplace=True)
     testdf.set_index('Id', inplace=True)
 
-    ydata = np.array(datadf[labelkey]) 
+    ydata = _np.array(datadf[labelkey]) 
     datadf.drop(columns=[labelkey], inplace=True)
     traindf = datadf[:-numvalid]
     validdf = datadf[-numvalid:]
