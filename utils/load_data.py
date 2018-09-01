@@ -139,10 +139,11 @@ def ames_housing(dirfolder, numvalid=100):
 
     ydata = _np.array(datadf[labelkey]) 
     datadf.drop(columns=[labelkey], inplace=True)
+    numdata = datadf.shape[0]
     traindf = datadf[:-numvalid]
     validdf = datadf[-numvalid:]
-    trainy = ydata[:-numvalid]
-    validy = ydata[-numvalid:]
+    trainy = ydata[:-numvalid].reshape(numdata-numvalid, 1)
+    validy = ydata[-numvalid:].reshape(numvalid, 1)
     numtrainsamp, numtrainfeat = traindf.shape
     numvalidsamp, numvalidfeat = validdf.shape
     numtestsamp, numtestfeat = testdf.shape
