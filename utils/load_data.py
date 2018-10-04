@@ -3,13 +3,20 @@ import os as _os
 import numpy as _np
 import pandas as _pd
 
-def _preprocess_numeric(df, listnumeric):
+from sklearn.preprocessing import LabelEncoder
+
+REPLACE_NAN_NUMERIC = -1
+REPLACE_NAN_CATEGORICAL = 'None'
+
+def _replace_nan(df, listnumeric, listcategorical):
     """Preprocess data to avoid numeric data columns with string 'NA' """
     listcolumns = df.keys().tolist()
     for i, col in enumerate(listcolumns):
         if col in listnumeric:
-            df.loc[:, col].replace('NA', -1, inplace=True)
+            df.loc[:, col].replace(_np.nan, REPLACE_NAN_NUMERIC, inplace=True)
             df.loc[:, col] = df.loc[:, col].apply(_pd.to_numeric)
+        if col in listcategorical:
+            df.loc[:, col].replace(_np.nan, REPLACE_NAN_CATEGORICAL, inplace=True)
     return df
 
 def _normalize_numeric(traindf, validdf, testdf, listnumeric):
@@ -34,8 +41,7 @@ def ames_housing(dirfolder, numvalid=100):
                'KitchenAbvGr', 'TotRmsAbvGrd', 'Fireplaces',
                'GarageYrBlt', 'GarageCars', 'GarageArea',
                'WoodDeckSF', 'OpenPorchSF', 'EnclosedPorch',
-               '3SsnPorch', 'ScreenPorch', 'PoolArea',
-               'MiscVal', 'YrSold']
+               '3SsnPorch', 'ScreenPorch', 'PoolArea']
     dictcategorical = {'MSSubClass': [20, 30, 40, 45, 50, 
                                   60, 70, 75, 80, 85, 
                                   90, 120, 150, 160, 
@@ -123,6 +129,9 @@ def ames_housing(dirfolder, numvalid=100):
                    'Fence': ['GdPrv', 'MnPrv', 'GdWo', 'MnWw', 'NA'],
                    'MiscFeature': ['Elev', 'Gar2', 'Othr', 'Shed',
                                    'TenC', 'NA'],
+                   'YrSold': [2000, 2001, 2002, 2003, 2004, 2005, 2006,
+                              2007, 2008, 2009, 2010, 2011, 2012, 2013,
+                              2014, 2015, 2016, 2017],
                    'MoSold': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
                    'SaleType': ['WD', 'CWD', 'VWD', 'New', 'COD',
                                 'Con', 'ConLw', 'ConLI', 'ConLD',
@@ -132,37 +141,94 @@ def ames_housing(dirfolder, numvalid=100):
                   }
     labelkey = 'SalePrice'
     
-    datadf = _pd.read_csv(_os.path.join(dirfolder, 'train.csv'), keep_default_na=False)
-    testdf = _pd.read_csv(_os.path.join(dirfolder, 'test.csv'), keep_default_na=False)    
+    datadf = _pd.read_csv(_os.path.join(dirfolder, 'train.csv'))
+    testdf = _pd.read_csv(_os.path.join(dirfolder, 'test.csv')) 
+    test_ID = testdf['Id'].values
     datadf.set_index('Id', inplace=True)
     testdf.set_index('Id', inplace=True)
 
     ydata = _np.array(datadf[labelkey]) 
     datadf.drop(columns=[labelkey], inplace=True)
-    numdata = datadf.shape[0]
-    traindf = datadf[:-numvalid]
-    validdf = datadf[-numvalid:]
+    num_data = datadf.shape[0]
+    
+    # compile all data
+    alldatadf = _pd.concat([datadf, testdf], ignore_index=True, sort=False)#.reset_index(drop=True)
+
+    # remove outlier
+#    alldatadf = alldatadf.drop(alldatadf[(datadf['GrLivArea']>4000) & (alldatadf['SalePrice']<300000)].index)
+    drop_columns = ['Utilities']
+    alldatadf = alldatadf.drop(columns=drop_columns)
+#    testdf = testdf.drop(columns=drop_columns)
+
+    # fillna
+    alldatadf.loc[:, 'Functional'].fillna('Typ', inplace=True)
+#    testdf.loc[:, 'Functional'].fillna('Typ', inplace=True)
+    cols_fillna_none = ['PoolQC', 'MiscFeature', 'Alley', 'Fence', 'MasVnrType', 'FireplaceQu',
+                        'GarageQual', 'GarageCond', 'GarageFinish', 'GarageType', 'BsmtQual', 'BsmtCond',
+                        'BsmtExposure', 'BsmtFinType1', 'BsmtFinType2', "MasVnrType", 'MSSubClass']
+    cols_fillna_zero = ['GarageYrBlt', 'GarageArea', 'GarageCars', 'BsmtFinSF1', 'BsmtFinSF2',
+                        'BsmtUnfSF','TotalBsmtSF', 'BsmtFullBath', 'BsmtHalfBath', "MasVnrArea"]
+    list_cols_name = alldatadf.columns.values[1:]
+    for cols_name in list_cols_name:
+        if cols_name in cols_fillna_none:
+            alldatadf.loc[:, cols_name].fillna('None', inplace=True)
+#            testdf.loc[:, cols_name].fillna('None', inplace=True)
+        elif cols_name in cols_fillna_zero:
+            alldatadf.loc[:, cols_name].fillna(0, inplace=True)
+#            testdf.loc[:, cols_name].fillna(0, inplace=True)
+        else:
+            if cols_name not in ['SalePrice']:
+                alldatadf.loc[:, cols_name].fillna(datadf.loc[:, cols_name].mode()[0], inplace=True)
+#                testdf.loc[:, cols_name].fillna(testdf.loc[:, cols_name].mode()[0], inplace=True)
+                
+    # Adding total sqfootage feature 
+    alldatadf['TotalSF'] = alldatadf['TotalBsmtSF'] + alldatadf['1stFlrSF'] + alldatadf['2ndFlrSF']
+#    testdf['TotalSF'] = testdf['TotalBsmtSF'] + testdf['1stFlrSF'] + testdf['2ndFlrSF']
+
+    # categorical data
+    cols = ['FireplaceQu', 'BsmtQual', 'BsmtCond', 'GarageQual', 'GarageCond', 
+        'ExterQual', 'ExterCond','HeatingQC', 'PoolQC', 'KitchenQual', 'BsmtFinType1', 
+        'BsmtFinType2', 'Functional', 'Fence', 'BsmtExposure', 'GarageFinish', 'LandSlope',
+        'LotShape', 'PavedDrive', 'Street', 'Alley', 'CentralAir', 'MSSubClass', 'OverallCond', 
+        'YrSold', 'MoSold']
+    for c in cols:
+        lbl = LabelEncoder() 
+        lbl.fit(list(alldatadf[c].values)) 
+        alldatadf[c] = lbl.transform(list(alldatadf[c].values))
+    
+    alldatadf = _pd.get_dummies(alldatadf)
+    datadf_new = alldatadf[:num_data]
+    testdf_new = alldatadf[num_data:]
+    testdf_new['Id'] = test_ID
+    testdf_new.set_index('Id', inplace=True)
+
+    numdata = datadf_new.shape[0]
+    traindf = datadf_new[:-numvalid]
+    validdf = datadf_new[-numvalid:]
     trainy = ydata[:-numvalid].reshape(numdata-numvalid, 1)
     validy = ydata[-numvalid:].reshape(numvalid, 1)
-    numtrainsamp, numtrainfeat = traindf.shape
-    numvalidsamp, numvalidfeat = validdf.shape
-    numtestsamp, numtestfeat = testdf.shape
-    print("Number of train samples is {}.".format(numtrainsamp))
-    print("Number of valid samples is {}.".format(numvalidsamp))
-    print("Number of test samples is {}.".format(numtestsamp))
+    trainy = _np.log1p(trainy)
+    validy = _np.log1p(validy)
     
-    numfeatcols = len(list(dictcategorical.keys()))+len(listnumeric)
-    print("Number of feature columns is {}.".format(numfeatcols))
+#    numtrainsamp, numtrainfeat = traindf.shape
+#    numvalidsamp, numvalidfeat = validdf.shape
+#    numtestsamp, numtestfeat = testdf.shape
+#    print("Number of train samples is {}.".format(numtrainsamp))
+#    print("Number of valid samples is {}.".format(numvalidsamp))
+#    print("Number of test samples is {}.".format(numtestsamp))
+    
+#    numfeatcols = len(list(dictcategorical.keys()))+len(listnumeric)
+#    print("Number of feature columns is {}.".format(numtrainfeat))
 
-    listcolumns = traindf.keys().tolist()
-    listcategorical = list(dictcategorical.keys())
-    print('Checking listnumeric ...')
-    print([num in listcolumns for num in listnumeric])
-    print("Checking dictcategorical ...")
-    print([cat in listcolumns for cat in listcategorical])
+#    listcolumns = traindf.keys().tolist()
+#    listcategorical = list(dictcategorical.keys())
+#    print('Checking listnumeric ...')
+#    print([num in listcolumns for num in listnumeric])
+#    print("Checking dictcategorical ...")
+#    print([cat in listcolumns for cat in listcategorical])
 
-    traindf = _preprocess_numeric(traindf, listnumeric)
-    validdf = _preprocess_numeric(validdf, listnumeric)
-    testdf = _preprocess_numeric(testdf, listnumeric)
+#    traindf = _replace_nan(traindf, listnumeric, listcategorical)
+#    validdf = _replace_nan(validdf, listnumeric, listcategorical)
+#    testdf = _replace_nan(testdf, listnumeric, listcategorical)
     #traindf, validdf, testdf = normalize_numeric(traindf, validdf, testdf, listnumeric)
-    return (traindf, trainy), (validdf, validy), testdf, listnumeric, dictcategorical
+    return (traindf, trainy), (validdf, validy), testdf_new
