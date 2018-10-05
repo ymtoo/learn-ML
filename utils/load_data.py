@@ -3,35 +3,8 @@ import os as _os
 import numpy as _np
 import pandas as _pd
 import random as _random
-
 from sklearn.preprocessing import LabelEncoder
 
-REPLACE_NAN_NUMERIC = -1
-REPLACE_NAN_CATEGORICAL = 'None'
-
-def _replace_nan(df, listnumeric, listcategorical):
-    """Preprocess data to avoid numeric data columns with string 'NA' """
-    listcolumns = df.keys().tolist()
-    for i, col in enumerate(listcolumns):
-        if col in listnumeric:
-            df.loc[:, col].replace(_np.nan, REPLACE_NAN_NUMERIC, inplace=True)
-            df.loc[:, col] = df.loc[:, col].apply(_pd.to_numeric)
-        if col in listcategorical:
-            df.loc[:, col].replace(_np.nan, REPLACE_NAN_CATEGORICAL, inplace=True)
-    return df
-
-def _normalize_numeric(traindf, validdf, testdf, listnumeric):
-    """Normalize numeric data"""
-    listcolumns = traindf.keys().tolist()
-    for col in listcolumns:
-        if col in listnumeric:
-            miu = traindf[col].mean()
-            sigma = traindf[col].std()
-            traindf[col] = (traindf[col]-miu)/sigma
-            validdf[col] = (validdf[col]-miu)/sigma
-            testdf[col] = (testdf[col]-miu)/sigma
-    return traindf, validdf, testdf
-    
 def ames_housing(dirfolder, numvalid=100):
     """Load ames houseing dataset"""
     listnumeric = ['LotFrontage', 'LotArea', 'YearBuilt', 
