@@ -2,6 +2,7 @@
 import os as _os
 import numpy as _np
 import pandas as _pd
+import random as _random
 
 from sklearn.preprocessing import LabelEncoder
 
@@ -32,6 +33,7 @@ def _normalize_numeric(traindf, validdf, testdf, listnumeric):
     return traindf, validdf, testdf
     
 def ames_housing(dirfolder, numvalid=100):
+    """Load ames houseing dataset"""
     listnumeric = ['LotFrontage', 'LotArea', 'YearBuilt', 
                'YearRemodAdd', 'MasVnrArea', 'BsmtFinSF1',
                'BsmtFinSF2', 'BsmtUnfSF', 'TotalBsmtSF',
@@ -158,11 +160,9 @@ def ames_housing(dirfolder, numvalid=100):
 #    alldatadf = alldatadf.drop(alldatadf[(datadf['GrLivArea']>4000) & (alldatadf['SalePrice']<300000)].index)
     drop_columns = ['Utilities']
     alldatadf = alldatadf.drop(columns=drop_columns)
-#    testdf = testdf.drop(columns=drop_columns)
 
     # fillna
     alldatadf.loc[:, 'Functional'].fillna('Typ', inplace=True)
-#    testdf.loc[:, 'Functional'].fillna('Typ', inplace=True)
     cols_fillna_none = ['PoolQC', 'MiscFeature', 'Alley', 'Fence', 'MasVnrType', 'FireplaceQu',
                         'GarageQual', 'GarageCond', 'GarageFinish', 'GarageType', 'BsmtQual', 'BsmtCond',
                         'BsmtExposure', 'BsmtFinType1', 'BsmtFinType2', "MasVnrType", 'MSSubClass']
@@ -172,18 +172,14 @@ def ames_housing(dirfolder, numvalid=100):
     for cols_name in list_cols_name:
         if cols_name in cols_fillna_none:
             alldatadf.loc[:, cols_name].fillna('None', inplace=True)
-#            testdf.loc[:, cols_name].fillna('None', inplace=True)
         elif cols_name in cols_fillna_zero:
             alldatadf.loc[:, cols_name].fillna(0, inplace=True)
-#            testdf.loc[:, cols_name].fillna(0, inplace=True)
         else:
             if cols_name not in ['SalePrice']:
                 alldatadf.loc[:, cols_name].fillna(datadf.loc[:, cols_name].mode()[0], inplace=True)
-#                testdf.loc[:, cols_name].fillna(testdf.loc[:, cols_name].mode()[0], inplace=True)
                 
     # Adding total sqfootage feature 
     alldatadf['TotalSF'] = alldatadf['TotalBsmtSF'] + alldatadf['1stFlrSF'] + alldatadf['2ndFlrSF']
-#    testdf['TotalSF'] = testdf['TotalBsmtSF'] + testdf['1stFlrSF'] + testdf['2ndFlrSF']
 
     # categorical data
     cols = ['FireplaceQu', 'BsmtQual', 'BsmtCond', 'GarageQual', 'GarageCond', 
@@ -209,26 +205,29 @@ def ames_housing(dirfolder, numvalid=100):
     validy = ydata[-numvalid:].reshape(numvalid, 1)
     trainy = _np.log1p(trainy)
     validy = _np.log1p(validy)
-    
-#    numtrainsamp, numtrainfeat = traindf.shape
-#    numvalidsamp, numvalidfeat = validdf.shape
-#    numtestsamp, numtestfeat = testdf.shape
-#    print("Number of train samples is {}.".format(numtrainsamp))
-#    print("Number of valid samples is {}.".format(numvalidsamp))
-#    print("Number of test samples is {}.".format(numtestsamp))
-    
-#    numfeatcols = len(list(dictcategorical.keys()))+len(listnumeric)
-#    print("Number of feature columns is {}.".format(numtrainfeat))
-
-#    listcolumns = traindf.keys().tolist()
-#    listcategorical = list(dictcategorical.keys())
-#    print('Checking listnumeric ...')
-#    print([num in listcolumns for num in listnumeric])
-#    print("Checking dictcategorical ...")
-#    print([cat in listcolumns for cat in listcategorical])
-
-#    traindf = _replace_nan(traindf, listnumeric, listcategorical)
-#    validdf = _replace_nan(validdf, listnumeric, listcategorical)
-#    testdf = _replace_nan(testdf, listnumeric, listcategorical)
-    #traindf, validdf, testdf = normalize_numeric(traindf, validdf, testdf, listnumeric)
     return (traindf, trainy), (validdf, validy), testdf_new
+
+def credit_card_fraud(path):
+    """Load credit card fraud dataset"""
+    _random.seed(1)
+    n_train_notfraud = 89800
+    n_train_fraud = 200
+    n_valid_notfraud = 9977
+    n_valid_fraud = 23
+    
+    df = _pd.read_csv(path, compression='zip', sep=',')
+    labelkey = 'Class'
+    yidx_notfraud = df.index[df[labelkey] == 0].tolist()
+    yidx_fraud = df.index[df[labelkey] == 1].tolist()
+    trainyidx_notfraud = _random.sample(yidx_notfraud, n_train_notfraud)
+    trainyidx_fraud = _random.sample(yidx_fraud, n_train_fraud)
+    
+    trainyidx = trainyidx_notfraud + trainyidx_fraud
+
+    traindf = df.loc[trainyidx]
+    validdf = df.loc[~df.index.isin(trainyidx)]
+    trainy = traindf[labelkey].values
+    traindf.drop(labels=[labelkey], axis=1, inplace=True)
+    validy = validdf[labelkey].values
+    validdf.drop(labels=[labelkey], axis=1, inplace=True)
+    return (traindf, trainy), (validdf, validy)
