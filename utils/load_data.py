@@ -196,6 +196,7 @@ def credit_card_fraud(path):
     trainyidx_fraud = _random.sample(yidx_fraud, n_train_fraud)
     
     trainyidx = trainyidx_notfraud + trainyidx_fraud
+    _random.shuffle(trainyidx)
 
     traindf = df.loc[trainyidx]
     validdf = df.loc[~df.index.isin(trainyidx)]
