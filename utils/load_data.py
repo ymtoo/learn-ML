@@ -3,10 +3,13 @@ import os as _os
 import numpy as _np
 import pandas as _pd
 import random as _random
+from sklearn.datasets import load_digits
 from sklearn.preprocessing import LabelEncoder
 
+from pctl_scale import PercentileScaler
+
 def ames_housing(dirfolder, numvalid=100):
-    """Load ames houseing dataset"""
+    """Load ames houseing datasets."""
     listnumeric = ['LotFrontage', 'LotArea', 'YearBuilt', 
                'YearRemodAdd', 'MasVnrArea', 'BsmtFinSF1',
                'BsmtFinSF2', 'BsmtUnfSF', 'TotalBsmtSF',
@@ -180,8 +183,83 @@ def ames_housing(dirfolder, numvalid=100):
     validy = _np.log1p(validy)
     return (traindf, trainy), (validdf, validy), testdf_new
 
+def ames_housing_simple(dirfolder, numvalid=100):
+    col_predictor_1 = ['LotArea', 'BsmtFinSF1', 'BsmtFinSF2', 'BsmtUnfSF', 'TotalBsmtSF', 
+                       '1stFlrSF', '2ndFlrSF', 'LowQualFinSF', 'GrLivArea', 'GarageArea',
+                       'WoodDeckSF', 'OpenPorchSF', 'EnclosedPorch', '3SsnPorch', 'ScreenPorch',
+                       'PoolArea', 'MiscVal', 'LotFrontage', 'MasVnrArea', 'GarageYrBlt',
+                       ]
+    col_predictor_2 = ['FireplaceQu', 'BsmtQual', 'BsmtCond', 'GarageCond', 'ExterQual', 
+                       'ExterCond', 'BsmtFinType1', 'BsmtFinType2', 'Functional', 'Fence', 
+                       'BsmtExposure', 'GarageFinish', 'LandSlope', 'LotShape', 'PavedDrive', 
+                       'Street', 'CentralAir', 'MSSubClass', 'OverallCond', 'OverallQual', 
+                       'YearBuilt', 'Neighborhood', 'SaleCondition', 'MSZoning', 'KitchenQual', 
+                       'Condition1', 'GarageCars', 'HalfBath', 'Foundation', 'YearRemodAdd',
+                       'Fireplaces', 'LotConfig', 'HeatingQC', 'HouseStyle', 'KitchenAbvGr',
+                       'Exterior1st', 'Exterior2nd', 'RoofStyle', 'BldgType', 'Alley', 
+                       'LandContour', 'RoofMatl', 'Heating', 'Electrical', 'BsmtFullBath', 
+                       'FullBath']
+#    
+#    'LotFrontage', 'YearBuilt', 
+#               'YearRemodAdd', 'MasVnrArea', 'BsmtFinSF1',
+#               'BsmtFinSF2', 'BsmtUnfSF', 'TotalBsmtSF',
+#               '1stFlrSF', '2ndFlrSF', 'LowQualFinSF',
+#               'GrLivArea', 'BsmtFullBath', 'BsmtHalfBath',
+#               'FullBath', 'HalfBath', 'BedroomAbvGr', 
+#               'KitchenAbvGr', 'TotRmsAbvGrd', 'Fireplaces',
+#               'GarageYrBlt', 'GarageCars', 'GarageArea',
+#               'WoodDeckSF', 'OpenPorchSF', 'EnclosedPorch',
+#               '3SsnPorch', 'ScreenPorch', 'PoolArea'
+                
+    col_target = ['SalePrice']
+    
+    datadf = _pd.read_csv(_os.path.join(dirfolder, 'train.csv'))
+    testdf = _pd.read_csv(_os.path.join(dirfolder, 'test.csv')) 
+    
+    datadf.drop(datadf[(datadf["GrLivArea"]>4000)&(datadf["SalePrice"]<300000)].index,inplace=True)
+    print(datadf.shape)
+    
+    datadf_new = _pd.DataFrame(index=datadf.index)
+    testdf_new = _pd.DataFrame(index=testdf.index)
+    test_ID = testdf['Id'].values
+    datadf.set_index('Id', inplace=True)
+    testdf.set_index('Id', inplace=True)
+    
+    for s in col_predictor_1:
+        datatmp = datadf[s].values.reshape(-1, 1).astype(float)
+        testtmp = testdf[s].values.reshape(-1, 1).astype(float)
+        transformer = PercentileScaler(upper=.95, lower=.05, naimpute=0).fit(datatmp)
+        datadf_new[s] = transformer.transform(datatmp)
+        testdf_new[s] = transformer.transform(testtmp)
+        
+    for s in col_predictor_2:
+        datatmp = datadf[s].apply(str).values.tolist()
+        testtmp = testdf[s].apply(str).values.tolist()
+        lbl = LabelEncoder() 
+        lbl.fit(datatmp+testtmp) 
+        datadf_new[s] = lbl.transform(datatmp)
+        testdf_new[s] = lbl.transform(testtmp)
+    
+    for s in col_target:
+        datadf_new[s] = datadf[s].values
+    
+    ydata = _np.array(datadf_new[col_target]) 
+    datadf_new.drop(columns=col_target, inplace=True)
+    
+    testdf_new['Id'] = test_ID
+    testdf_new.set_index('Id', inplace=True)
+    
+    numdata = datadf_new.shape[0]
+    traindf = datadf_new[:-numvalid]
+    validdf = datadf_new[-numvalid:]
+    trainy = ydata[:-numvalid].reshape(numdata-numvalid, 1)
+    validy = ydata[-numvalid:].reshape(numvalid, 1)
+    trainy = _np.log1p(trainy)
+    validy = _np.log1p(validy)
+    return (traindf, trainy), (validdf, validy), testdf_new
+
 def credit_card_fraud(path):
-    """Load credit card fraud dataset"""
+    """Load credit card fraud datasets."""
     _random.seed(1)
     n_train_notfraud = 89800
     n_train_fraud = 200
@@ -205,3 +283,30 @@ def credit_card_fraud(path):
     validy = validdf[labelkey].values
     validdf.drop(labels=[labelkey], axis=1, inplace=True)
     return (traindf, trainy), (validdf, validy)
+
+def digits(prc_valid, prc_test, random_seed=0):
+    """Load digits datasets."""
+    digits = load_digits()
+    X = digits.data
+    y = digits.target
+    n_height = 8
+    n_width = 8
+    n_data = X.shape[0]
+    n_valid = int(n_data*prc_valid/100)
+    n_test = int(n_data*prc_test/100)
+    n_train = n_data-n_valid-n_test
+    list_n = [n_train, n_valid, n_test]
+    
+    _np.random.seed(random_seed)
+    idx = _np.linspace(0, n_data, num=n_data,  endpoint=False, dtype=_np.int)
+    list_data = []
+    list_target = []
+    for n in list_n:
+        idx_sub = _np.random.choice(idx, size=n, replace=False)
+        idx = _np.delete(idx, _np.where(_np.isin(idx, idx_sub)))
+        data_temp = X[idx_sub, :].reshape([n, n_height, n_width])
+        list_data.append(data_temp)
+        list_target.append(y[idx_sub])
+    trainX, validX, testX = tuple(list_data)
+    trainy, validy, testy = tuple(list_target)
+    return (trainX, trainy), (validX, validy), (testX, testy)
